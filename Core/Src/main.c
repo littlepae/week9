@@ -49,6 +49,8 @@ DMA_HandleTypeDef hdma_usart2_rx;
 DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
+int16_t inputChar;
+
 typedef struct _UartStructure
 {
 	UART_HandleTypeDef *huart;
@@ -154,7 +156,7 @@ int main(void)
 	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
-		int16_t inputChar = UARTReadChar(&UART2);
+		inputChar = UARTReadChar(&UART2);
 		if (inputChar != -1)
 		{
 #ifdef UARTDEBUG
@@ -164,7 +166,6 @@ int main(void)
 #else
 			DynamixelProtocal2(MainMemory, 1, inputChar, &UART2);
 #endif
-
 		}
 		/* USER CODE END WHILE */
 
@@ -538,7 +539,28 @@ void DynamixelProtocal2(uint8_t *Memory, uint8_t MotorID, int16_t dataIn,
 			}
 			case 0x03://WRITE
 			{
-				//LAB
+				//create packet template
+				uint8_t temp1[] =
+				{ 0xff, 0xff, 0xfd, 0x00, 0x00, 0x04, 0x00, 0x55, 0x00, 0x00,
+						0x00 };
+				//config MotorID
+				temp1[4] = MotorID;
+				//calcuate CRC
+				uint16_t crc_calc = update_crc(0, temp1, 9);
+				temp1[9] = crc_calc & 0xff;
+				temp1[10] = (crc_calc >> 8) & 0xFF;
+				//Write Data
+				uint16_t startAddr = (parameter[0]&0xFF)|(parameter[1]<<8 &0xFF);
+				int Writelen = datalen - 5;
+				int i = 0;
+				while(i < Writelen)
+				{
+					Memory[startAddr + i] = parameter[2 + i]&0xFF;
+					i++;
+				}
+				//Sent Response Packet
+				UARTTxWrite(uart, temp1, 11);
+				break;
 			}
 			default: //Unknown Inst
 			{
